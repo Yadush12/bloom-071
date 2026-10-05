@@ -17,6 +17,8 @@ const fallbackMilestones = () => [
 const skillList = (s) => (Array.isArray(s) ? s : String(s || '').split(',')).map((x) => String(x).trim().toLowerCase()).filter(Boolean);
 module.exports = (app, { auth, only, wrap, pool, appendLedger }) => {
   app.get('/api/projects/:id/milestones', auth, wrap(async (req, res) => {
+    const ok = req.user.role === 'admin' || (await pool.query(`SELECT 1 FROM projects WHERE id=$1 AND sponsor_id=$2 UNION SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2 AND status<>'left'`, [req.params.id, req.user.id])).rowCount > 0;
+    if (!ok) return res.json([]);
     res.json((await pool.query('SELECT * FROM milestones WHERE project_id=$1 ORDER BY id', [req.params.id])).rows);
   }));
   app.post('/api/projects/:id/agents/scope', auth, only('sponsor'), wrap(async (req, res) => {

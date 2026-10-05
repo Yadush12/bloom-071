@@ -42,11 +42,13 @@ app.get('/api/projects/:id', auth, wrap(async (req, res) => {
 }));
 app.post('/api/projects/:id/members', auth, only('sponsor'), wrap(async (req, res) => {
   const { user_id, role } = req.body;
-  await pool.query('INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [req.params.id, user_id, role]);
+  if (!(await pool.query('SELECT 1 FROM projects WHERE id=$1 AND sponsor_id=$2', [req.params.id, req.user.id])).rowCount) return res.status(403).json({ error: 'Not your project' });
+    await pool.query('INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [req.params.id, user_id, role]);
   await appendLedger({ project_id: +req.params.id, actor_id: req.user.id, action: 'MEMBER_INVITED', details: { user_id, role } });
   res.json({ ok: true });
 }));
 app.post('/api/projects/:id/charter', auth, only('sponsor'), wrap(async (req, res) => {
+  if (!(await pool.query('SELECT 1 FROM projects WHERE id=$1 AND sponsor_id=$2', [req.params.id, req.user.id])).rowCount) return res.status(403).json({ error: 'Not your project' });
   const prev = await latestCharter(req.params.id); const c = { ...(prev || {}), ...req.body };
   const v = (prev ? prev.version : 0) + 1;
   const ins = (await pool.query(`INSERT INTO charters(project_id,version,engagement_model,scope,rewards,ip_rules,publication_rules,confidentiality_rules,ai_rules,credit_split,exit_rules,dispute_rules,commercialization_rules) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
@@ -68,7 +70,8 @@ app.post('/api/charters/:id/accept', auth, wrap(async (req, res) => {
 }));
 app.get('/api/ledger/verify', wrap(async (req, res) => res.json(await verifyLedger())));
 app.get('/api/ledger', auth, wrap(async (req, res) => {
-  const q = req.query.project_id ? await pool.query('SELECT * FROM ledger_entries WHERE project_id=$1 ORDER BY id', [req.query.project_id]) : await pool.query('SELECT * FROM ledger_entries ORDER BY id');
+  const vis = req.user.role === 'admin' ? '' : ` AND project_id IN (SELECT id FROM projects WHERE sponsor_id=${+req.user.id} UNION SELECT project_id FROM project_members WHERE user_id=${+req.user.id} AND status<>'left')`;
+  const q = req.query.project_id ? await pool.query('SELECT * FROM ledger_entries WHERE project_id=$1' + vis + ' ORDER BY id', [req.query.project_id]) : await pool.query('SELECT * FROM ledger_entries WHERE true' + vis + ' ORDER BY id');
   const names = Object.fromEntries((await pool.query('SELECT id,name FROM users')).rows.map((u) => [u.id, u.name]));
   res.json(q.rows.map((r) => ({ event_id: 'EVT-' + String(r.id).padStart(3, '0'), id: r.id, project_id: r.project_id, actor: names[r.actor_id] || 'System', actor_type: r.actor_type, human_owner: names[r.human_owner_id] || null, action: r.action, details: JSON.parse(r.details), ts: r.ts, hash: r.hash.slice(0, 10), prev_hash: r.prev_hash.slice(0, 10) })));
 }));
