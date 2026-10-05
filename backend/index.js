@@ -77,4 +77,5 @@ app.post('/api/ledger/tamper', auth, only('admin'), wrap(async (req, res) => {
   res.json({ tampered: req.body.id });
 }));
 require('./agents')(app, { auth, only, wrap, pool, appendLedger });
+require('./workspace')(app, { auth, only, wrap, pool, appendLedger });
 app.listen(process.env.PORT || 4000, () => console.log('API on ' + (process.env.PORT || 4000)));

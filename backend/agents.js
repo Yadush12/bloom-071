@@ -7,7 +7,7 @@ async function askJSON(system, user) {
     return JSON.parse(j.message.content);
   } catch (e) { console.error('LLM failed, using fallback:', e.message); return null; }
 }
-const SCOPE_SYSTEM = `You are a Project Scoping Agent for a research collaboration platform. Break the research problem into 4 sequential milestones. Respond ONLY with JSON: {"milestones":[{"title":"","description":"","required_skills":["python"],"deliverable":"","acceptance_criteria":""}]}. Use short lowercase skill names like python, ml, computer vision, medical imaging, edge devices, tflite, optimization, data analysis.`;
+const SCOPE_SYSTEM = `You are a Project Scoping Agent for a research collaboration platform. Break the research problem into 4 sequential milestones. Respond ONLY with JSON: {"milestones":[{"title":"","description":"","required_skills":["python"],"deliverable":"","acceptance_criteria":""}]}. Every milestone MUST have a non-empty title. required_skills MUST be chosen ONLY from this list: python, ml, computer vision, medical imaging, data analysis, edge devices, tflite, optimization (2 to 3 per milestone).`;
 const fallbackMilestones = () => [
   { title: 'Dataset and problem analysis', description: 'Analyse fundus image datasets, quality and class balance.', required_skills: ['python', 'medical imaging', 'data analysis'], deliverable: 'Dataset analysis report', acceptance_criteria: 'Report covers dataset quality, preprocessing and limitations.' },
   { title: 'Model development', description: 'Build and train a baseline DR classification model.', required_skills: ['python', 'ml', 'computer vision'], deliverable: 'Trained model and training notebook', acceptance_criteria: 'Model reaches agreed sensitivity on the validation set.' },
@@ -27,6 +27,7 @@ module.exports = (app, { auth, only, wrap, pool, appendLedger }) => {
     const source = ms ? MODEL : 'fallback-template';
     if (!ms) ms = fallbackMilestones();
     await pool.query(`DELETE FROM milestones WHERE project_id=$1 AND status='PLANNED'`, [p.id]);
+    const VOCAB=['python','ml','computer vision','medical imaging','data analysis','edge devices','tflite','optimization'];const fb=fallbackMilestones();ms=ms.map((m,i)=>{const f=fb[i%fb.length];const sk=skillList(m.required_skills).filter(x=>VOCAB.includes(x));return {...m,title:(m.title&&String(m.title).trim())||f.title,description:m.description||f.description,deliverable:m.deliverable||f.deliverable,acceptance_criteria:m.acceptance_criteria||f.acceptance_criteria,required_skills:sk.length?sk:f.required_skills};});
     const each = Math.floor((p.budget || 0) / ms.length);
     for (const m of ms) await pool.query('INSERT INTO milestones(project_id,title,description,required_skills,deliverable,acceptance_criteria,amount) VALUES($1,$2,$3,$4,$5,$6,$7)',
       [p.id, m.title, m.description, skillList(m.required_skills), m.deliverable, m.acceptance_criteria, each]);
@@ -54,3 +55,5 @@ module.exports = (app, { auth, only, wrap, pool, appendLedger }) => {
     res.json({ required_skills: required, recommended: picks, filtered_out });
   }));
 };
+
+module.exports.askJSON = askJSON;

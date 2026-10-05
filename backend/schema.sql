@@ -12,3 +12,4 @@ CREATE TABLE payouts(id SERIAL PRIMARY KEY,escrow_id INT,user_id INT,amount INT,
 CREATE TABLE credentials(id SERIAL PRIMARY KEY,project_id INT,user_id INT,credential_type TEXT,issued_at TIMESTAMPTZ DEFAULT now());
 CREATE TABLE disputes(id SERIAL PRIMARY KEY,project_id INT,raised_by INT,reason TEXT,evidence TEXT,status TEXT DEFAULT 'OPEN',resolution TEXT);
 CREATE TABLE ledger_entries(id SERIAL PRIMARY KEY,project_id INT,actor_id INT,actor_type TEXT,human_owner_id INT,action TEXT,details TEXT,ts TEXT,prev_hash TEXT,hash TEXT);
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS agent_report TEXT;
