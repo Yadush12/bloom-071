@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express'), cors = require('cors'), jwt = require('jsonwebtoken'), bcrypt = require('bcryptjs');
 const pool = require('./db'); const { appendLedger, verifyLedger } = require('./ledger');
-const app = express(); app.use(cors()); app.use(express.json());
+const app = express(); app.use(cors()); app.use(express.json()); global.M={req:0,err:0,ms:0}; app.use((q,s,n)=>{const t=Date.now();s.on('finish',()=>{global.M.req++;global.M.ms+=Date.now()-t;if(s.statusCode>=500)global.M.err++;});n();});
 const SECRET = process.env.JWT_SECRET;
 const wrap = (fn) => (req, res) => fn(req, res).catch((e) => { console.error(e); res.status(500).json({ error: e.message }); });
 const auth = (req, res, next) => { try { req.user = jwt.verify((req.headers.authorization || '').replace('Bearer ', ''), SECRET); next(); } catch { res.status(401).json({ error: 'Login required' }); } };
@@ -78,4 +78,5 @@ app.post('/api/ledger/tamper', auth, only('admin'), wrap(async (req, res) => {
 }));
 require('./agents')(app, { auth, only, wrap, pool, appendLedger });
 require('./workspace')(app, { auth, only, wrap, pool, appendLedger });
+require('./rewards')(app, { auth, only, wrap, pool, appendLedger });
 app.listen(process.env.PORT || 4000, () => console.log('API on ' + (process.env.PORT || 4000)));

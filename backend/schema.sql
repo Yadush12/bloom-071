@@ -13,3 +13,5 @@ CREATE TABLE credentials(id SERIAL PRIMARY KEY,project_id INT,user_id INT,creden
 CREATE TABLE disputes(id SERIAL PRIMARY KEY,project_id INT,raised_by INT,reason TEXT,evidence TEXT,status TEXT DEFAULT 'OPEN',resolution TEXT);
 CREATE TABLE ledger_entries(id SERIAL PRIMARY KEY,project_id INT,actor_id INT,actor_type TEXT,human_owner_id INT,action TEXT,details TEXT,ts TEXT,prev_hash TEXT,hash TEXT);
 ALTER TABLE contributions ADD COLUMN IF NOT EXISTS agent_report TEXT;
+ALTER TABLE milestones ADD COLUMN IF NOT EXISTS accept_by TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS outcome TEXT;
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS commit_count INT DEFAULT 0;
