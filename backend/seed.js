@@ -23,6 +23,7 @@ const bcrypt = require('bcryptjs'); const pool = require('./db'); const { append
   const p2 = await mk('Student-led annotation guide for retinal image datasets', 'Create an open annotation guideline for retinal image datasets.', 'CONFIDENTIAL: Draft guideline outline shared by the faculty lead.', 'knowledge-sharing', 0, 'No payment: certificates, co-authorship, recommendation letters');
   for (const [uid, role] of [[meera, 'expert'], [a, 'student'], [b, 'student'], [c, 'student']]) await pool.query('INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3)', [p1, uid, role]);
   for (const [uid, role] of [[meera, 'expert'], [a, 'student'], [b, 'student']]) await pool.query('INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3)', [p2, uid, role]);
+  await pool.query("INSERT INTO milestones(project_id,title,description,required_skills,deliverable,acceptance_criteria,amount,status) VALUES($1,'Annotation guideline draft','Draft the retinal annotation guideline','{python}','Guideline draft','Covers label definitions and examples',0,'PLANNED')", [p2]);
   console.log('Seeded. Password for all demo users: pass123');
   process.exit(0);
 })();

@@ -19,7 +19,7 @@ module.exports = (app, { auth, only, wrap, pool, appendLedger }) => {
     const others = (await pool.query('SELECT artifact FROM contributions WHERE user_id<>$1', [req.user.id])).rows;
     const sim = others.reduce((mx, o) => Math.max(mx, similarity(artifact, o.artifact || '')), 0);
     const status = sim >= 60 ? 'FLAGGED' : 'SUBMITTED';
-    const c = (await pool.query('INSERT INTO contributions(project_id,milestone_id,user_id,artifact,artifact_hash,description,ai_declared,similarity,status) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *', [m.project_id, m.id, req.user.id, artifact, hash, description, !!ai_declared, sim, status])).rows[0];
+    const c = (await pool.query('INSERT INTO contributions(project_id,milestone_id,user_id,artifact,artifact_hash,description,ai_declared,similarity,status,commit_count) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *', [m.project_id, m.id, req.user.id, artifact, hash, description, !!ai_declared, sim, status, +req.body.commit_count || 0])).rows[0];
     await appendLedger({ project_id: m.project_id, actor_id: req.user.id, action: 'CONTRIBUTION_SUBMITTED', details: { contribution: c.id, milestone: m.title, sha256: hash.slice(0, 16), ai_declared: !!ai_declared, similarity: sim + '%' } });
     if (status === 'FLAGGED') await appendLedger({ project_id: m.project_id, actor_type: 'SYSTEM', action: 'INTEGRITY_FLAG', details: { contribution: c.id, similarity: sim + '%', note: 'Human review required' } });
     res.json({ ...c, integrity: { similarity: sim, status: sim >= 60 ? 'REVIEW REQUIRED' : 'CLEAR' } });

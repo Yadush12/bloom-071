@@ -73,10 +73,12 @@ app.get('/api/ledger', auth, wrap(async (req, res) => {
   res.json(q.rows.map((r) => ({ event_id: 'EVT-' + String(r.id).padStart(3, '0'), id: r.id, project_id: r.project_id, actor: names[r.actor_id] || 'System', actor_type: r.actor_type, human_owner: names[r.human_owner_id] || null, action: r.action, details: JSON.parse(r.details), ts: r.ts, hash: r.hash.slice(0, 10), prev_hash: r.prev_hash.slice(0, 10) })));
 }));
 app.post('/api/ledger/tamper', auth, only('admin'), wrap(async (req, res) => {
+  const o = (await pool.query('SELECT details FROM ledger_entries WHERE id=$1', [req.body.id])).rows[0]; global.TAMPER = global.TAMPER || {}; if (o && !(req.body.id in global.TAMPER)) global.TAMPER[req.body.id] = o.details;
   await pool.query(`UPDATE ledger_entries SET details='{"tampered":true}' WHERE id=$1`, [req.body.id]);
   res.json({ tampered: req.body.id });
 }));
 require('./agents')(app, { auth, only, wrap, pool, appendLedger });
 require('./workspace')(app, { auth, only, wrap, pool, appendLedger });
 require('./rewards')(app, { auth, only, wrap, pool, appendLedger });
+require('./extras')(app, { auth, only, wrap, pool });
 app.listen(process.env.PORT || 4000, () => console.log('API on ' + (process.env.PORT || 4000)));
