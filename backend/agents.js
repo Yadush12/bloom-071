@@ -1,10 +1,10 @@
 const OLLAMA = 'http://localhost:11434/api/chat', MODEL = 'qwen3:8b';
-async function askJSON(system, user) {
+async function askJSON(system, user, timeoutMs = 240000) {
   try {
-    const r = await fetch(OLLAMA, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(90000),
-      body: JSON.stringify({ model: MODEL, stream: false, think: false, format: 'json', messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }) });
+    const r = await fetch(OLLAMA, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(timeoutMs),
+      body: JSON.stringify({ model: MODEL, stream: false, keep_alive: '2h', think: false, format: 'json', messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }) });
     const j = await r.json();
-    return JSON.parse(j.message.content);
+    return JSON.parse(String(j.message.content).replace(/\/no_think/g, '').replace(/<think>[\s\S]*?<\/think>/g, ''));
   } catch (e) { console.error('LLM failed, using fallback:', e.message); return null; }
 }
 const SCOPE_SYSTEM = `You are a Project Scoping Agent for a research collaboration platform. Break the research problem into 4 sequential milestones. Respond ONLY with JSON: {"milestones":[{"title":"","description":"","required_skills":["python"],"deliverable":"","acceptance_criteria":""}]}. Every milestone MUST have a non-empty title. required_skills MUST be chosen ONLY from this list: python, ml, computer vision, medical imaging, data analysis, edge devices, tflite, optimization (2 to 3 per milestone).`;

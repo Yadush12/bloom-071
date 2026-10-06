@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
+import Lab from './Lab.jsx'
+import Dashboard from './Dashboard.jsx'
+import Credits from './Credits.jsx'
+import Messages from './Messages.jsx'
+import Profile from './Profile.jsx'
 import Editor from '@monaco-editor/react'
+import { fireConfetti, SplitDonut, ChainStrip } from './Fancy.jsx'
+import Files from './Files.jsx'
 
 const API = 'http://localhost:4000'
 let TOKEN = ''
@@ -21,7 +28,7 @@ const STEPS = [
   { n: 5, t: 'Accept & Pay', tab: 'pay', who: 'sponsor@demo.com', cap: 'Sponsor accepts, reward engine explains each share, escrow releases. Unpaid projects issue credentials.' },
   { n: 6, t: 'Verify', tab: 'verify', who: 'admin@demo.com', cap: 'Edit an old ledger entry and verification fails.' }
 ]
-const TABS = [['overview', 'Project & charter'], ['scope', 'Scope & match'], ['work', 'Workspace'], ['pay', 'Escrow & rewards'], ['verify', 'Verify & admin']]
+const TABS = [['overview', 'Project & charter'], ['scope', 'Scope & match'], ['work', 'Workspace'], ['pay', 'Escrow & rewards'], ['files', 'Files'], ['lab', 'Code Lab'], ['dashboard', 'Dashboard'], ['credits', 'Credits'], ['messages', 'Messages'], ['people', 'People'], ['verify', 'Verify & admin']]
 const FIELDS = [['Engagement model', 'engagement_model'], ['Scope', 'scope'], ['Rewards', 'rewards'], ['IP', 'ip_rules'], ['Publication', 'publication_rules'], ['Confidentiality', 'confidentiality_rules'], ['AI use', 'ai_rules'], ['Credit split', 'credit_split'], ['Exit', 'exit_rules'], ['Disputes', 'dispute_rules'], ['Commercialisation', 'commercialization_rules']]
 const SAMPLES = {
   'Preprocessing': 'def normalize(pixels):\n    lo, hi = min(pixels), max(pixels)\n    if hi == lo:\n        return [0.0 for _ in pixels]\n    return [(p - lo) / (hi - lo) for p in pixels]\n',
@@ -141,6 +148,8 @@ function Work({ pid, user, say, setBusy }) {
   const [mono, setMono] = useState(navigator.onLine)
   const [rev, setRev] = useState({})
   const [rep, setRep] = useState({})
+  const [mine, setMine] = useState({})
+  const [mres, setMres] = useState({})
   const load = useCallback(async () => {
     try { setMs(await api('/api/projects/' + pid + '/milestones')); setPj(await api('/api/projects/' + pid)) } catch (e) { /* ignore */ }
     try { setCs(await api('/api/projects/' + pid + '/contributions')) } catch (e) { setCs([]) }
@@ -152,8 +161,11 @@ function Work({ pid, user, say, setBusy }) {
     try { const r = await api('/api/milestones/' + mid + '/contributions', 'POST', { description: f.description, artifact: f.artifact, ai_declared: f.ai, commit_count: +f.commits }); say('Submitted. Integrity check: ' + r.integrity.status + ' (' + r.integrity.similarity + '% similar)', r.integrity.status !== 'CLEAR'); load() } catch (e) { say(e.message, true) }
   }
   const agent = async (c) => {
-    setBusy('Workspace Agent is reading the code, writing tests and running them… up to 4 minutes')
+    setBusy('Workspace Agent is reading the code, writing tests and running them… up to 1 minute')
     try { const r = await api('/api/contributions/' + c.id + '/agent-review', 'POST'); setRep((x) => ({ ...x, [c.id]: r })); say('Agent finished. Every step is in the ledger with you as human owner.') } catch (e) { say(e.message, true) } finally { setBusy('') }
+  }
+  const runMine = async (c) => {
+    try { const r = await api('/api/contributions/' + c.id + '/run-my-tests', 'POST', { tests: mine[c.id] || '' }); setMres((x) => ({ ...x, [c.id]: r })); say('Ran ' + r.total + ' of your test cases: ' + r.passed + ' passed. Logged in the ledger.', r.passed < r.total) } catch (e) { say(e.message, true) }
   }
   const review = async (c, decision) => {
     const r = rev[c.id] || { quality: 8, impact: 8, effort: 8, comments: '' }
@@ -170,7 +182,6 @@ function Work({ pid, user, say, setBusy }) {
       <div className="row">{Object.keys(SAMPLES).map((k) => <button key={k} className="sec" onClick={() => setF((x) => ({ ...x, artifact: SAMPLES[k], description: x.description || k + ' code' }))}>Load sample: {k}</button>)}<label className="small"><input type="checkbox" checked={!mono} onChange={(e) => setMono(!e.target.checked)} style={{ width: 'auto' }} /> plain editor</label></div>
       {mono ? <Editor height="220px" language="python" theme="vs-dark" value={f.artifact} onChange={(v) => setF((x) => ({ ...x, artifact: v || '' }))} options={{ minimap: { enabled: false }, fontSize: 13 }} /> : <textarea className="code" value={f.artifact} onChange={(e) => setF((x) => ({ ...x, artifact: e.target.value }))} />}
       <div className="row"><label className="small"><input type="checkbox" checked={f.ai} onChange={(e) => setF((x) => ({ ...x, ai: e.target.checked }))} style={{ width: 'auto' }} /> I used AI tools (declaration)</label>
-        <label className="small">Git commits (demo only, never used for rewards)<input type="number" value={f.commits} onChange={(e) => setF((x) => ({ ...x, commits: e.target.value }))} /></label>
         <button onClick={submit} disabled={!f.artifact || !mid}>Submit contribution</button></div>
     </div>}
     <div className="card"><h3>Contributions</h3>
@@ -184,7 +195,17 @@ function Work({ pid, user, say, setBusy }) {
             {c.impact_score && <Badge t={'impact ' + c.impact_score + ' · quality ' + c.quality_score} c="blue" />}</div>
           <pre>{c.artifact}</pre>
           {worker && <button onClick={() => agent(c)}>Run AI agent review (writes and runs tests)</button>}
-          {r && <div className="hint"><b>Agent report:</b> {r.summary}<br />Syntax: {r.syntax_ok ? '✅' : '❌'} · Tests: {r.tests_passed ? '✅ passed' : '❌ failed'}{r.issues && r.issues.length ? <><br />Issues: {r.issues.join('; ')}</> : null}<details><summary>Generated tests and output</summary><pre>{r.tests}{'\n\n'}{r.test_output}</pre></details></div>}
+          {r && <div className="hint"><b>Agent report:</b> {r.summary}<br />Syntax: {r.syntax_ok ? '✅' : '❌'} · Tests: {r.tests_passed ? '✅ passed' : '❌ failed'}{r.issues && r.issues.length ? <><br />Issues: {r.issues.join('; ')}</> : null}
+            {!r.details && !r.tests_passed && <div className="tiny">⚠ Old report without failure details. Click "Run AI agent review" again to see exactly which test failed.</div>}
+            {r.details && r.details.load_error && <div className="tiny">❌ {r.details.load_error.file} line {r.details.load_error.line}: {r.details.load_error.type}: {r.details.load_error.message} <code>{r.details.load_error.source}</code></div>}
+            {r.details && (r.details.tests || []).filter((t) => !t.ok).map((t, i) => <div key={i} className="tiny">❌ <b>{t.name}</b> (test line {t.test_line}): <code>{t.test_source}</code> {t.got !== undefined ? '→ got ' + t.got + ' ' + t.op + ' expected ' + t.expected : '→ ' + t.error_type + ': ' + t.message}{t.code_source ? ' · breaks in your code ' + t.code_function + '() line ' + t.code_line + ': ' + t.code_source : ''}</div>)}
+            <details open><summary>Generated tests and output</summary><pre>{r.tests}{'\n\n'}{r.test_output}</pre></details></div>}
+          {worker && <details className="hint"><summary><b>Try your own test cases</b></summary>
+            <div className="tiny">One per line. Write an expression that should be True, for example: preprocess([2, 4], 4) == [0.5, 1.0, 0.0, 0.0]</div>
+            <textarea className="code" style={{ minHeight: 80 }} placeholder={'preprocess([2, 4], 4) == [0.5, 1.0, 0.0, 0.0]\npreprocess([], 3) == [0.0, 0.0, 0.0]'} value={mine[c.id] || ''} onChange={(e) => setMine((x) => ({ ...x, [c.id]: e.target.value }))} />
+            <button onClick={() => runMine(c)}>Run my tests</button>
+            {mres[c.id] && <div><b>{mres[c.id].passed} of {mres[c.id].total} passed</b>{mres[c.id].results.map((t, i) => <div key={i} className="tiny">{t.ok ? '✅' : '❌'} <code>{t.case}</code>{t.error ? ' → ' + t.error : ''}{t.got !== undefined ? ' → got ' + t.got + ', expected ' + t.expected : ''}</div>)}</div>}
+          </details>}
           {user.role === 'expert' && ['SUBMITTED', 'FLAGGED'].includes(c.status) && <div className="hint"><b>Expert review</b>
             <div className="row">{['quality', 'impact', 'effort'].map((k) => <label key={k} className="small">{k}<input type="number" step="0.1" value={(rev[c.id] || {})[k] ?? 8} onChange={(e) => setR(c.id, k, e.target.value)} /></label>)}</div>
             <input placeholder="Reason (required)" value={(rev[c.id] || {}).comments || ''} onChange={(e) => setR(c.id, 'comments', e.target.value)} />
@@ -198,8 +219,9 @@ function Reward({ r }) {
   const all = [...r.experts, ...r.students]
   return (<div>
     <div className="small">Milestone {inr(r.amount)} · platform fee {inr(r.platform_fee)} · AI compute reserve {inr(r.ai_compute_reserve)} (AI does not earn) · {r.outcome === 'NEGATIVE_RESULT' ? 'documented negative result: effort-based' : 'positive result'}</div>
-    <table><thead><tr><th>Person</th><th>Role</th><th>Git commits (NOT used)</th><th>Weight</th><th>Amount</th></tr></thead>
-      <tbody>{all.map((x) => <tr key={x.id}><td><b>{x.name}</b><div className="tiny">{x.why}</div></td><td>{x.role}</td><td className="strike">{x.commits ?? '—'}</td><td>{x.weight_pct ? x.weight_pct + '%' : '—'}</td><td><b>{inr(x.amount)}</b></td></tr>)}</tbody></table>
+    <SplitDonut r={r} />
+    <table><thead><tr><th>Person</th><th>Role</th><th>Weight</th><th>Amount</th></tr></thead>
+      <tbody>{all.map((x) => <tr key={x.id}><td><b>{x.name}</b><div className="tiny">{x.why}</div></td><td>{x.role}</td><td>{x.weight_pct ? x.weight_pct + '%' : '—'}</td><td><b>{inr(x.amount)}</b></td></tr>)}</tbody></table>
     <div className="tiny">{r.rule}</div></div>)
 }
 
@@ -249,6 +271,10 @@ function Verify({ user, say }) {
   const [m, setM] = useState(null)
   const load = useCallback(() => { if (user.role === 'admin') api('/api/admin/metrics').then(setM).catch(() => {}) }, [user])
   useEffect(() => { load(); const t = setInterval(load, 4000); return () => clearInterval(t) }, [load])
+  const [users, setUsers] = useState([])
+  const loadU = useCallback(() => { if (user.role === 'admin') api('/api/admin/users').then(setUsers).catch(() => {}) }, [user])
+  useEffect(() => { loadU() }, [loadU])
+  const verifyU = async (id) => { try { await api('/api/admin/users/' + id + '/verify', 'POST'); say('User verified and logged in the ledger.'); loadU() } catch (e) { say(e.message, true) } }
   const tamper = async () => { try { const evs = await api('/api/ledger'); const t = evs[2]; await api('/api/ledger/tamper', 'POST', { id: t.id }); say('Edited ' + t.event_id + ' directly in the database. Watch the chain banner.', true) } catch (e) { say(e.message, true) } }
   const restore = async () => { try { await api('/api/ledger/restore', 'POST'); say('Original entry restored. Chain valid again.') } catch (e) { say(e.message, true) } }
   if (user.role !== 'admin') return <div className="card"><div className="hint">Log in as <b>Admin</b> for the verification demo and system metrics.</div></div>
@@ -256,6 +282,10 @@ function Verify({ user, say }) {
     <div className="card"><h3>Ledger verification</h3>
       <div className="small">Each entry stores the hash of the previous one. Editing any old entry breaks every hash after it.</div>
       <div className="row"><button className="danger" onClick={tamper}>Tamper with an old entry</button><button className="ok" onClick={restore}>Restore original</button></div>
+    </div>
+    <ChainStrip api={api} />
+    <div className="card"><h3>Identity verification</h3>
+      <table><tbody>{users.map((u) => <tr key={u.id}><td>{u.name}</td><td className="tiny">{u.role}</td><td>{u.verification_status === 'verified' ? <Badge t="VERIFIED" c="green" /> : <button onClick={() => verifyU(u.id)}>Verify</button>}</td></tr>)}</tbody></table>
     </div>
     {m && <div className="card"><h3>System overview</h3>
       <div className="grid">{[['Active projects', m.active_projects], ['Users', m.users], ['AI requests', m.ai_requests], ['Integrity alerts', m.integrity_alerts], ['Pending reviews', m.pending_reviews], ['Avg latency ms', m.avg_latency_ms], ['Error rate %', m.error_rate_pct], ['Ledger entries', m.ledger_entries]].map(([l, v]) => <div key={l} className="stat"><b>{v}</b><span className="tiny">{l}</span></div>)}</div>
@@ -269,25 +299,42 @@ export default function App() {
   const [email, setEmail] = useState('')
   const [pid, setPid] = useState(1)
   const [projects, setProjects] = useState([])
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useState('dashboard')
   const [step, setStep] = useState(1)
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState('')
-  const say = (t, bad) => { setMsg({ t, bad }); setTimeout(() => setMsg(null), 7000) }
+  const [form, setForm] = useState({ email: '', password: '', name: '', role: 'student', skills: '' })
+  const [reg, setReg] = useState(false)
+  const f = (k) => (e) => setForm((x) => ({ ...x, [k]: e.target.value }))
+  const say = (t, bad) => { if (!bad && /releas|accepted|credential|issued/i.test(String(t))) fireConfetti(); setMsg({ t, bad }); setTimeout(() => setMsg(null), 7000) }
   const refresh = async () => { try { setProjects(await api('/api/projects')) } catch (e) { /* ignore */ } }
-  const login = async (em) => {
-    try { const r = await api('/api/auth/login', 'POST', { email: em, password: 'pass123' }); TOKEN = r.token; localStorage.setItem('email', em); setEmail(em); setUser(r.user); await refresh() } catch (e) { say(e.message, true) }
+  const login = async (em, pw = 'pass123') => {
+    try { const r = await api('/api/auth/login', 'POST', { email: em, password: pw }); TOKEN = r.token; sessionStorage.setItem('token', r.token); sessionStorage.setItem('email', em); setEmail(em); setUser(r.user); await refresh() } catch (e) { say(e.message, true) }
   }
-  useEffect(() => { const e = localStorage.getItem('email'); if (e) login(e) }, [])
+  const register = async () => {
+    try { await api('/api/auth/register', 'POST', form); say('Registered. An admin must verify your identity before you can be matched. You can log in now.'); setReg(false) } catch (e) { say(e.message, true) }
+  }
+  const logout = () => { TOKEN = ''; sessionStorage.clear(); setUser(null); setEmail('') }
+  useEffect(() => { const t = sessionStorage.getItem('token'); if (t) { TOKEN = t; api('/api/auth/me').then((u) => { setUser(u); setEmail(sessionStorage.getItem('email') || ''); refresh() }).catch(() => sessionStorage.clear()) } }, [])
   const goStep = async (s) => { setStep(s.n); if (email !== s.who) await login(s.who); setTab(s.tab) }
-  if (!user) return (<div className="login card"><h2>Collaborative Research Ecosystem</h2><p>Team Bloom-071 · Gardenia 2K26. Pick a demo user to begin (synthetic data, password pass123).</p>
-    {DEMO.map(([n, e]) => <button key={e} onClick={() => login(e)}>{n}</button>)}{msg && <div className={'toast ' + (msg.bad ? 'bad' : '')}>{msg.t}</div>}</div>)
+  if (!user) return (<div className="login card"><h2>Collaborative Research Ecosystem</h2><p className="tiny">Team Bloom-071 · Gardenia 2K26</p>
+    <h3>{reg ? 'Create account' : 'Log in'}</h3>
+    {reg && <input placeholder="Full name" value={form.name} onChange={f('name')} />}
+    <input placeholder="Email" value={form.email} onChange={f('email')} />
+    <input type="password" placeholder="Password (6+ characters)" value={form.password} onChange={f('password')} />
+    {reg && <><select value={form.role} onChange={f('role')}><option value="student">Student</option><option value="expert">Expert / mentor</option><option value="sponsor">Sponsor</option></select>
+      <input placeholder="Skills, comma separated (e.g. python, ml)" value={form.skills} onChange={f('skills')} /></>}
+    <div className="row">{reg ? <button onClick={register}>Register</button> : <button onClick={() => login(form.email, form.password)}>Log in</button>}
+      <button className="sec" onClick={() => setReg(!reg)}>{reg ? 'Back to login' : 'New here? Register'}</button></div>
+    {msg && <div className={'toast ' + (msg.bad ? 'bad' : '')}>{msg.t}</div>}
+    <hr /><div className="tiny">Demo shortcuts (synthetic users, password pass123):</div>
+    <div className="row">{DEMO.map(([n, e]) => <button key={e} className="sec" onClick={() => login(e)}>{n}</button>)}</div></div>)
   const cur = STEPS.find((s) => s.n === step)
   return (<div>
     <div className="top"><h1>🔬 Collaborative Research Ecosystem</h1>
       <span className="tiny" style={{ color: '#b9bdd6' }}>Logged in as</span>
       {DEMO.map(([n, e]) => <button key={e} className={email === e ? 'on' : ''} onClick={() => login(e)}>{n}</button>)}
-      <select style={{ width: 'auto' }} value={pid} onChange={(e) => setPid(+e.target.value)}>{projects.map((p) => <option key={p.id} value={p.id}>#{p.id} {p.title.slice(0, 40)} · {p.engagement_model}</option>)}</select></div>
+      <button onClick={logout}>Log out</button><select style={{ width: 'auto' }} value={pid} onChange={(e) => setPid(+e.target.value)}>{projects.map((p) => <option key={p.id} value={p.id}>#{p.id} {p.title.slice(0, 40)} · {p.engagement_model}</option>)}</select></div>
     <div className="steps">{STEPS.map((s) => <div key={s.n} className={'step ' + (s.n === step ? 'on' : '')} onClick={() => goStep(s)}><b>{s.n}. {s.t}</b><span>{s.n === step ? s.cap : 'as ' + (DEMO.find((d) => d[1] === s.who) || [''])[0]}</span></div>)}</div>
     {busy && <div className="busy">⏳ {busy}</div>}
     {msg && <div className={'toast ' + (msg.bad ? 'bad' : '')}>{msg.t}</div>}
@@ -298,7 +345,13 @@ export default function App() {
       {tab === 'scope' && <Scope pid={pid} user={user} say={say} setBusy={setBusy} />}
       {tab === 'work' && <Work pid={pid} user={user} say={say} setBusy={setBusy} />}
       {tab === 'pay' && <Pay pid={pid} user={user} say={say} setBusy={setBusy} />}
+      {tab === 'files' && <Files pid={pid} user={user} say={say} api={api} />}
       {tab === 'verify' && <Verify user={user} say={say} />}
+      {tab === 'people' ? <Profile key={user.id} api={api} user={user} say={say} /> : null}
+      {tab === 'messages' ? <Messages key={user.id} api={api} user={user} say={say} pid={pid} /> : null}
+      {tab === 'credits' ? <Credits key={user.id} api={api} user={user} say={say} /> : null}
+      {tab === 'dashboard' ? <Dashboard key={user.id} api={api} user={user} /> : null}
+      {tab === 'lab' ? <Lab key={user.id} api={api} user={user} say={say} pid={pid} /> : null}
     </div><Ledger pid={pid} /></div>
   </div>)
 }

@@ -24,6 +24,15 @@ const bcrypt = require('bcryptjs'); const pool = require('./db'); const { append
   for (const [uid, role] of [[meera, 'expert'], [a, 'student'], [b, 'student'], [c, 'student']]) await pool.query('INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3)', [p1, uid, role]);
   for (const [uid, role] of [[meera, 'expert'], [a, 'student'], [b, 'student']]) await pool.query('INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3)', [p2, uid, role]);
   await pool.query("INSERT INTO milestones(project_id,title,description,required_skills,deliverable,acceptance_criteria,amount,status) VALUES($1,'Annotation guideline draft','Draft the retinal annotation guideline','{python}','Guideline draft','Covers label definitions and examples',0,'PLANNED')", [p2]);
+  const addFile = async (path, content, owner, readers = []) => {
+    const id = (await pool.query('INSERT INTO project_files(project_id,path,content,created_by) VALUES($1,$2,$3,$4) RETURNING id', [p1, path, content, owner])).rows[0].id;
+    for (const [uid, lv] of [[owner, 'write'], ...readers.map((r) => [r, 'read'])]) await pool.query('INSERT INTO file_access(file_id,user_id,level,granted_by) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING', [id, uid, lv, sponsor]);
+  };
+  await addFile('module1-data/preprocess.py', 'def normalize(pixels):\n    lo, hi = min(pixels), max(pixels)\n    return [(p - lo) / (hi - lo) for p in pixels]\n', a, [meera]);
+  await addFile('module1-data/dataset_notes.md', '# Dataset notes\nQuality issues found in the sponsor fundus dataset.\n', a, [meera]);
+  await addFile('module2-model/train.py', '# Training script for the DR classifier\nEPOCHS = 20\n', b, [meera]);
+  await addFile('module3-edge/quantize.py', 'def quantize(weights, bits=8):\n    levels = 2 ** bits - 1\n    return [round(w * levels) for w in weights]\n', c, [meera]);
+  await addFile('docs/PROJECT_NOTES.md', '# Project notes\nShared notes for the whole team.\n', meera, [a, b, c]);
   console.log('Seeded. Password for all demo users: pass123');
   process.exit(0);
 })();

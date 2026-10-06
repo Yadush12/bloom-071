@@ -15,3 +15,7 @@ CREATE TABLE ledger_entries(id SERIAL PRIMARY KEY,project_id INT,actor_id INT,ac
 ALTER TABLE contributions ADD COLUMN IF NOT EXISTS agent_report TEXT;
 ALTER TABLE milestones ADD COLUMN IF NOT EXISTS accept_by TIMESTAMPTZ, ADD COLUMN IF NOT EXISTS outcome TEXT;
 ALTER TABLE contributions ADD COLUMN IF NOT EXISTS commit_count INT DEFAULT 0;
+
+DROP TABLE IF EXISTS file_access, project_files CASCADE;
+CREATE TABLE project_files(id SERIAL PRIMARY KEY,project_id INT REFERENCES projects(id),path TEXT NOT NULL,content TEXT DEFAULT '',created_by INT REFERENCES users(id),created_at TIMESTAMPTZ DEFAULT now(),updated_at TIMESTAMPTZ DEFAULT now(),UNIQUE(project_id,path));
+CREATE TABLE file_access(file_id INT REFERENCES project_files(id) ON DELETE CASCADE,user_id INT REFERENCES users(id),level TEXT DEFAULT 'read',granted_by INT,granted_at TIMESTAMPTZ DEFAULT now(),PRIMARY KEY(file_id,user_id));

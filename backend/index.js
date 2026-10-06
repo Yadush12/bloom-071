@@ -22,6 +22,24 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   await appendLedger({ actor_id: u.id, action: 'LOGIN', details: { role: u.role } });
   res.json({ token: jwt.sign(user, SECRET, { expiresIn: '12h' }), user });
 }));
+app.post('/api/auth/register', wrap(async (req, res) => {
+  const { name, email, password, role, skills } = req.body;
+  if (!name || !email || !password || password.length < 6) return res.status(400).json({ error: 'Name, email and a password of 6+ characters are required' });
+  if (!['student', 'expert', 'sponsor'].includes(role)) return res.status(400).json({ error: 'Role must be student, expert or sponsor' });
+  if ((await pool.query('SELECT 1 FROM users WHERE email=$1', [email])).rowCount) return res.status(409).json({ error: 'Email already registered' });
+  const sk = String(skills || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const u = (await pool.query(`INSERT INTO users(name,email,password_hash,role,verification_status,skills,availability) VALUES($1,$2,$3,$4,'pending',$5,'10 hrs/week') RETURNING id,name,role`, [name, email, bcrypt.hashSync(password, 8), role, sk])).rows[0];
+  await appendLedger({ actor_id: u.id, action: 'USER_REGISTERED', details: { role, verification: 'pending: admin must verify before matching' } });
+  res.json({ ...u, verification_status: 'pending' });
+}));
+app.get('/api/auth/me', auth, wrap(async (req, res) => res.json(req.user)));
+app.get('/api/admin/users', auth, only('admin'), wrap(async (req, res) => res.json((await pool.query('SELECT id,name,email,role,verification_status FROM users ORDER BY id')).rows)));
+app.post('/api/admin/users/:id/verify', auth, only('admin'), wrap(async (req, res) => {
+  const u = (await pool.query(`UPDATE users SET verification_status='verified' WHERE id=$1 RETURNING id,name`, [req.params.id])).rows[0];
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  await appendLedger({ actor_id: req.user.id, action: 'USER_VERIFIED', details: { user: u.name } });
+  res.json(u);
+}));
 app.get('/api/projects', auth, wrap(async (req, res) => {
   res.json((await pool.query('SELECT id,title,public_summary,status,engagement_model,budget,sponsor_id FROM projects ORDER BY id')).rows);
 }));
@@ -84,4 +102,10 @@ require('./agents')(app, { auth, only, wrap, pool, appendLedger });
 require('./workspace')(app, { auth, only, wrap, pool, appendLedger });
 require('./rewards')(app, { auth, only, wrap, pool, appendLedger });
 require('./extras')(app, { auth, only, wrap, pool });
+require('./files')(app, { auth, wrap, pool, appendLedger });
+require('./profiles')(app, { auth, only, wrap, pool, appendLedger });
+require('./messages')(app, { auth, wrap, pool });
+require('./credits')(app, { auth, wrap, pool, appendLedger });
+require('./dashboard')(app, { auth, wrap, pool });
+require('./lab')(app, { auth, wrap, pool, appendLedger });
 app.listen(process.env.PORT || 4000, () => console.log('API on ' + (process.env.PORT || 4000)));

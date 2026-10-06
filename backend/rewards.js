@@ -39,7 +39,7 @@ module.exports = (app, { auth, only, wrap, pool, appendLedger }) => {
         const pct = tw ? Math.round((100 * s.score) / tw) : Math.round(100 / studs.length);
         const eq = Math.round(sp.equalPer);
         return { id: s.id, name: s.name, role: 'student', commits: s.commits, weight_pct: pct, amount: sp.shares[i],
-          why: `${pct}% weight from reviewed ${m.outcome === 'NEGATIVE_RESULT' ? 'documented effort' : `impact ${avg(s.imp)}, quality ${avg(s.q)}, effort ${avg(s.e)}`}. ${s.commits} commits are shown for transparency but NOT used. Share = ${inr(eq)} equal part + ${inr(sp.shares[i] - eq)} weighted part.` };
+          why: `${pct}% weight from reviewed ${m.outcome === 'NEGATIVE_RESULT' ? 'documented effort' : `impact ${avg(s.imp)}, quality ${avg(s.q)}, effort ${avg(s.e)}`}. Commit counts are never used. Share = ${inr(eq)} equal part + ${inr(sp.shares[i] - eq)} weighted part.` };
       })
     };
   }
